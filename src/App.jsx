@@ -9,7 +9,6 @@ const THIRD_CSV      = `${PUBLISHED_BASE}?gid=535694100&single=true&output=csv`;
 const SCORERS_CSV    = `${PUBLISHED_BASE}?gid=288857986&single=true&output=csv`;
 
 // ── CSV Parsers ───────────────────────────────────────────────────────────────
-// Raw arrays — for standings/third/scorers where header rows are unreliable
 function parseRawCSV(text) {
   return text.trim().split("\n").map((line) => {
     const vals = [];
@@ -24,7 +23,6 @@ function parseRawCSV(text) {
   });
 }
 
-// Header-keyed objects — for fixtures
 function parseFixturesCSV(text) {
   const lines = text.trim().split("\n");
   const headers = lines[0].split(",").map(h => h.trim());
@@ -186,12 +184,43 @@ function ScotlandTab({ fixtures }) {
     }
   }
   const played=scotMatches.filter(isPlayed), upcoming=scotMatches.filter(f=>!isPlayed(f));
+  const groupByDate=(matches)=>{
+    const map={};
+    matches.forEach(f=>{
+      const k=eveningSlateKey(f)||"Unknown";
+      if(!map[k])map[k]=[];
+      map[k].push(f);
+    });
+    return map;
+  };
+  const upcomingByDate=groupByDate(upcoming);
+  const playedByDate=groupByDate([...played].reverse());
   return(
     <>
       <div className="scotland-hero">
-        <div className="scotland-flag">🏴󠁧󠁢󠁳󠁣󠁴󠁿</div>
-        <div className="scotland-title">Scotland</div>
-        <div className="scotland-group">Group C · FIFA World Cup 2026</div>
+        <div className="scotland-hero-top">
+          <img
+            src="https://upload.wikimedia.org/wikipedia/en/thumb/5/50/Scotland_national_football_team_logo_2014.svg/250px-Scotland_national_football_team_logo_2014.svg.png"
+            alt="Scotland FA"
+            className="scotland-badge"
+            onError={e=>e.target.style.display="none"}
+          />
+          <div className="scotland-hero-text">
+            <div className="scotland-title">Scotland</div>
+            <div className="scotland-group">Group C · FIFA World Cup 2026</div>
+          </div>
+          <a
+            href="https://open.spotify.com/playlist/7rSIQu8YIHBdDLC4WqpxnJ?si=926fd6265b0548c6"
+            target="_blank"
+            rel="noreferrer"
+            className="spotify-btn"
+          >
+            <svg className="spotify-icon" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+            </svg>
+            Match Day Playlist
+          </a>
+        </div>
         {countdown&&nextMatch&&(
           <div className="scotland-countdown">
             <div className="countdown-label">Next match in</div>
@@ -200,8 +229,24 @@ function ScotlandTab({ fixtures }) {
           </div>
         )}
       </div>
-      {upcoming.length>0&&<><div className="section-title">Upcoming</div>{upcoming.map(f=><MatchCard key={f["Match #"]} f={f}/>)}</>}
-      {played.length>0&&<><div className="section-title">Results</div>{[...played].reverse().map(f=><MatchCard key={f["Match #"]} f={f}/>)}</>}
+      {upcoming.length>0&&<>
+        <div className="section-title">Upcoming</div>
+        {Object.entries(upcomingByDate).map(([dateKey,matches])=>(
+          <div key={dateKey}>
+            <div className="date-header">{formatDate(dateKey)}</div>
+            {matches.map(f=><MatchCard key={f["Match #"]} f={f}/>)}
+          </div>
+        ))}
+      </>}
+      {played.length>0&&<>
+        <div className="section-title">Results</div>
+        {Object.entries(playedByDate).map(([dateKey,matches])=>(
+          <div key={dateKey}>
+            <div className="date-header">{formatDate(dateKey)}</div>
+            {matches.map(f=><MatchCard key={f["Match #"]} f={f}/>)}
+          </div>
+        ))}
+      </>}
     </>
   );
 }
@@ -235,7 +280,10 @@ function parseStandingsCSV(rawRows) {
         }
       }
     }
-    const sort=t=>[...t].sort((a,b)=>parseInt(a.pos||9)-parseInt(b.pos||9));
+    const sort=t=>[...t].sort((a,b)=>{
+      const pd=parseInt(b.pts||0)-parseInt(a.pts||0);
+      return pd!==0?pd:parseInt(b.gd||0)-parseInt(a.gd||0);
+    });
     if(leftTeams.length) groups.push({name:leftLetter, teams:sort(leftTeams)});
     if(rightTeams.length)groups.push({name:rightLetter,teams:sort(rightTeams)});
   }
@@ -256,7 +304,7 @@ function StandingsTab({ standings }) {
             <tbody>
               {grp.teams.map((t,i)=>(
                 <tr key={t.team} className={`${i<2?"qualify":""}${t.team==="Scotland"?" scotland-row":""}`}>
-                  <td className="pos">{t.pos}</td><td className="team-name">{t.team}</td>
+                  <td className="pos">{i+1}</td><td className="team-name">{t.team}</td>
                   <td>{t.p}</td><td>{t.w}</td><td>{t.d}</td><td>{t.l}</td><td>{t.gd}</td><td className="pts">{t.pts}</td>
                 </tr>
               ))}
@@ -269,16 +317,8 @@ function StandingsTab({ standings }) {
   );
 }
 
-// ── Tables Tab (3rd Place Tracker + Golden Boot) ──────────────────────────────
+// ── Tables Tab ────────────────────────────────────────────────────────────────
 function parseThirdPlaceCSV(rawRows) {
-  // CSV structure:
-  // row 0  = title
-  // row 1  = legend
-  // row 2  = col headers (Rank, Group, Team, P, W, D, L, GF, GA, GD, Pts)
-  // rows 3-14 = unsorted raw data (12 teams) — SKIP these
-  // row 15 = blank
-  // row 16 = "Ranked — Top 8 Qualify" section header — SKIP
-  // rows 17-28 = ranked data — USE these only
   const teams=[];
   for(let i=17;i<rawRows.length;i++){
     const row=rawRows[i];
@@ -287,19 +327,15 @@ function parseThirdPlaceCSV(rawRows) {
     const rank=parseInt(first,10);
     if(isNaN(rank))continue;
     teams.push({
-      rank, group:(row[1]||"").trim(), team:(row[2]||"").trim(),
-      p:(row[3]||"0"), w:(row[4]||"0"), d:(row[5]||"0"), l:(row[6]||"0"),
-      gf:(row[7]||"0"), ga:(row[8]||"0"), gd:(row[9]||"0"), pts:(row[10]||"0"),
+      rank,group:(row[1]||"").trim(),team:(row[2]||"").trim(),
+      p:(row[3]||"0"),w:(row[4]||"0"),d:(row[5]||"0"),l:(row[6]||"0"),
+      gf:(row[7]||"0"),ga:(row[8]||"0"),gd:(row[9]||"0"),pts:(row[10]||"0"),
     });
   }
   return teams.sort((a,b)=>a.rank-b.rank);
 }
 
 function parseScorersCSV(rawRows) {
-  // CSV columns (0-indexed):
-  // A(0)=Match#, B(1)=Player, C(2)=Team, D(3)=Minute, E(4)=OG, F(5)=Date (blank col),
-  // G(6)=blank, H(7)=Player(leaderboard), I(8)=Team, J(9)=Goals, K(10)=blank, L(11)=Own Goals
-  // Row 0 = headers, rows 1+ = data
   const scorers=[];
   let ownGoals=0;
   for(let i=1;i<rawRows.length;i++){
@@ -310,14 +346,12 @@ function parseScorersCSV(rawRows) {
     if(i===1) ownGoals=parseInt(row[11]||"0",10);
     if(player&&!isNaN(goals)&&goals>0) scorers.push({player,team,goals});
   }
-  const sorted = scorers.sort((a,b)=>b.goals-a.goals).slice(0,20);
-  return{scorers:sorted,ownGoals};
+  return{scorers:scorers.sort((a,b)=>b.goals-a.goals).slice(0,20),ownGoals};
 }
 
 function TablesTab({ thirdPlace, scorers, ownGoals }) {
   return(
     <>
-      {/* ── Golden Boot ── */}
       <div className="tables-section-header">👟 Golden Boot</div>
       {!scorers||scorers.length===0?(
         <div className="empty">No goals scored yet — tournament starts 11 June 2026</div>
@@ -325,9 +359,7 @@ function TablesTab({ thirdPlace, scorers, ownGoals }) {
         <>
           <div className="scorers-table-wrap">
             <table className="scorers-table">
-              <thead>
-                <tr><th>#</th><th className="player-col">Player</th><th>Team</th><th>Goals</th></tr>
-              </thead>
+              <thead><tr><th>#</th><th className="player-col">Player</th><th>Team</th><th>Goals</th></tr></thead>
               <tbody>
                 {scorers.map((s,i)=>(
                   <tr key={s.player} className={i===0?"top-scorer":""}>
@@ -343,8 +375,6 @@ function TablesTab({ thirdPlace, scorers, ownGoals }) {
           {ownGoals>0&&<div className="own-goals-note">Own goals this tournament: {ownGoals}</div>}
         </>
       )}
-
-      {/* ── 3rd Place Tracker ── */}
       <div className="tables-section-header" style={{marginTop:"20px"}}>🥉 3rd Place Tracker</div>
       <div className="third-qualify-note">Top 8 third-placed teams qualify for Round of 32</div>
       {!thirdPlace||thirdPlace.length===0?(
@@ -352,9 +382,7 @@ function TablesTab({ thirdPlace, scorers, ownGoals }) {
       ):(
         <div className="third-table-wrap">
           <table className="third-table">
-            <thead>
-              <tr><th>#</th><th>Grp</th><th className="team-col">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr>
-            </thead>
+            <thead><tr><th>#</th><th>Grp</th><th className="team-col">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr></thead>
             <tbody>
               {thirdPlace.map((t,i)=>(
                 <tr key={t.team} className={`${i<8?"third-qualify":"third-elim"}${t.team==="Scotland"?" scotland-row":""}`}>
@@ -392,29 +420,21 @@ export default function App() {
   const loadData = useCallback(async () => {
     setLoading(true); setError(false);
     try {
-      // Fixtures
       const res = await fetch(FIXTURES_CSV);
       if (!res.ok) throw new Error("Failed");
       setFixtures(parseFixturesCSV(await res.text()));
-
-      // Standings
       try {
         const sRes=await fetch(STANDINGS_CSV);
         if(sRes.ok){const raw=parseRawCSV(await sRes.text());const p=parseStandingsCSV(raw);if(p.length>0)setStandings(p);}
       } catch{}
-
-      // 3rd Place Tracker
       try {
         const tRes=await fetch(THIRD_CSV);
         if(tRes.ok){const raw=parseRawCSV(await tRes.text());const p=parseThirdPlaceCSV(raw);if(p.length>0)setThirdPlace(p);}
       } catch{}
-
-      // Scorers
       try {
         const scRes=await fetch(SCORERS_CSV);
         if(scRes.ok){const raw=parseRawCSV(await scRes.text());const{scorers:s,ownGoals:og}=parseScorersCSV(raw);setScorers(s);setOwnGoals(og);}
       } catch{}
-
       setLastUpdated(new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
     } catch { setError(true); }
     finally  { setLoading(false); }
@@ -423,7 +443,7 @@ export default function App() {
   useEffect(()=>{loadData();},[loadData]);
 
   const tabs=[
-    {id:"today",    label:"Today",   emoji:"📅"},
+    {id:"today",    label:"Today",    emoji:"📅"},
     {id:"week",     label:"This Week",emoji:"📆"},
     {id:"scotland", label:"Scotland", emoji:"🏴󠁧󠁢󠁳󠁣󠁴󠁿"},
     {id:"standings",label:"Standings",emoji:"📊"},
@@ -435,9 +455,20 @@ export default function App() {
   return(
     <div className="hub">
       <div className="header">
-        <div>
-          <div className="header-title">⚽ Cupo Hub</div>
-          <div className="header-sub">FIFA World Cup 2026{lastUpdated&&<span> · Updated {lastUpdated}</span>}</div>
+        <div className="header-left">
+          <div className="header-top-row">
+            <img
+              src="https://upload.wikimedia.org/wikipedia/en/thumb/1/17/2026_FIFA_World_Cup_emblem.svg/250px-2026_FIFA_World_Cup_emblem.svg.png"
+              alt="FIFA World Cup 2026"
+              className="wc-logo"
+              onError={e=>e.target.style.display="none"}
+            />
+            <div>
+              <div className="header-title">Nock Mundial</div>
+              <div className="header-tagline">El Mundial desde Cumnock</div>
+            </div>
+          </div>
+          {lastUpdated&&<div className="header-sub">Updated {lastUpdated}</div>}
         </div>
         <button className="refresh-btn" onClick={loadData} disabled={loading}>
           {loading?"⏳":"↻"} {loading?"Loading…":"Refresh"}
@@ -464,6 +495,18 @@ export default function App() {
           {tab==="results"  &&<ResultsTab   fixtures={fixtures}/>}
         </>}
       </div>
+      <footer className="app-footer">
+        <img
+          src="https://www.cumnockjuniors.com/wp-content/uploads/2022/12/Cumnock_Juniors_FC_crest-150x150.png"
+          alt="Cumnock Juniors FC"
+          className="footer-badge"
+          onError={e=>e.target.style.display="none"}
+        />
+        <div className="footer-text">
+          <span className="footer-prototype">Built as a Cumnock Juniors FC prototype · Season 2026/27</span>
+          <span className="footer-byline">Nock Mundial · by DP</span>
+        </div>
+      </footer>
     </div>
   );
 }
